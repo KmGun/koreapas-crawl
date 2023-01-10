@@ -5,16 +5,19 @@ import * as puppeteer from 'puppeteer';
 // crawl 주기 설정 (시간 단위)
 const crawlTerm = 6;
 
+// 전화번호 RegExp
+const contactNumberRegExp = /\d{2,3}(-|\.|\s*)\d{3,4}(-|\.|\s*)\d{3,4}/gm;
+
 // 로그인할 아이디 비번
 const koreapas_id = "gunpol";
 const koreapas_pw = "159rjs497."
 
 // 크롤링 데이터 형식
-interface ICrawledData {
+interface IBoardCrawledData {
     boardId : number;
     boardDate : number;
     contactNumber : string;
-    homeImgUrl : string;
+    homeImgUrls : string[];
     otherInfo : string;
 }
 
@@ -23,7 +26,7 @@ function toTimestamp(dateString : string) : number {
     return date.getTime();
 }
 
-async function crawl(crawlTerm : number , koreapas_id : string, koreapas_pw : string) : Promise<ICrawledData[]> {
+async function crawl(crawlTerm : number , koreapas_id : string, koreapas_pw : string) : Promise<IBoardCrawledData[]> {
     //1. 브라우저 켜고, 새탭 열기, 크기조정
     const browser = await puppeteer.launch({headless : false})
 	const page = await browser.newPage();
@@ -53,12 +56,11 @@ async function crawl(crawlTerm : number , koreapas_id : string, koreapas_pw : st
             // i. 최초 크롤링
             
                 // 1) 크롤링 결과물 준비
-                const crawledData = [];
+                const crawledDatas = [];
 
-                // 2) 글번호 크롤링 (크롤링동안 게시물 올라오는건 고려 X, 대신 사람들 안올라오는 시간에 크롤링 ㄱㄱ)
-                    // 그 페이지 마지막 게시물까지 크롤링
+                // 2) 크롤링 (크롤링동안 게시물 올라오는건 고려 X, 대신 사람들 안올라오는 시간에 크롤링 ㄱㄱ)
+                    // 한페이지 크롤링
                     for (let i=0;i<30;i++) {
-                        // 게시물 클릭
                         await page.click(`#revolution_main_table > tbody > tr:nth-child(${2*i+3}) > td:nth-child(4) > a`)
                         // 정보들 크롤링 해서 객체에 담기
                             // boardDate 크롤링 + 정제
@@ -68,6 +70,7 @@ async function crawl(crawlTerm : number , koreapas_id : string, koreapas_pw : st
                                 );
                                 // 앞부분 정제
                                 boardDate = boardDate.replace('등록일 : ','')
+                                console.log('boardDate',boardDate)
                                 // 뒷부분 정제 
                                     // i. ~시간 전 부분 있으면 삭제
                                     if (boardDate.includes('전')){
@@ -94,11 +97,36 @@ async function crawl(crawlTerm : number , koreapas_id : string, koreapas_pw : st
                                     boardId = boardId.slice(firstNumberIndex,barIndex);
                             // 게시글 - otherInfo
                                 let otherInfo = await page.$eval('#bonmoon > tbody > tr:nth-child(1) > td > div',
-                                    element => element.textContent
+                                    element => element.textContent as string
                                 );
+
                             // 전화번호 - contactNumber
-                                let contactNumber = 
-                                
+                                const contactNumberMatchResult = otherInfo?.match(contactNumberRegExp);
+                                let contactNumber : string;
+                                contactNumber = (contactNumberMatchResult as any)[0];
+                                contactNumber = contactNumber.replace(/\D/gm,"");
+
+                                 
+                                 // 01012345678 형식으로 반환
+                            // 이미지 url - homeImgUrl
+                                // 이미지 최대 10장가져옴
+
+                                    const homeImgUrls = await page.$$eval('img[id^=gifb_]',
+                                        elements => elements.map(element => element.src)
+                                    );
+                            // 객체에 담기
+                            const boardCrawledData : IBoardCrawledData = {
+                                boardId : parseInt(boardId),
+                                boardDate : parseInt(boardDate),
+                                contactNumber,
+                                homeImgUrls,
+                                otherInfo,
+                            }
+                            console.log(boardCrawledData);
+
+                        // 페이지 빠져나오기
+                        await page.goBack();
+                        
                     }
 
                     
@@ -175,7 +203,7 @@ async function crawl(crawlTerm : number , koreapas_id : string, koreapas_pw : st
 
 
 
-    return [{contactNumber : "a", roomUrl: "b", otherInfo : "c"}] 
+    return [{boardId : 1, boardDate : 2, contactNumber : "a", homeImgUrls: ["b"], otherInfo : "c"}] 
 }
 
 crawl(crawlTerm,koreapas_id,koreapas_pw);
