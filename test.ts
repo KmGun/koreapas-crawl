@@ -11,8 +11,10 @@ const koreapas_pw = "159rjs497."
 
 // 크롤링 데이터 형식
 interface ICrawledData {
+    boardId : number;
+    boardDate : number;
     contactNumber : string;
-    roomUrl : string;
+    homeImgUrl : string;
     otherInfo : string;
 }
 
@@ -46,10 +48,72 @@ async function crawl(crawlTerm : number , koreapas_id : string, koreapas_pw : st
         // await page.waitForTimeout(2000)
         
 
-    // 3. 크롤링 - 최근 crawlTerm 시간동안 올라온 게시물
-            // 크롤링 내용 : 전번, 사진 src , 게시글 내용
-            // 0) 크롤링 결과물 준비
-            const crawledData = [];
+    // 4. 크롤링 - 최근 crawlTerm 시간동안 올라온 게시물
+            // 크롤링 내용 : 전번, 사진 src , 게시글 내용, 게시물 번호, 게시물 날짜
+            // i. 최초 크롤링
+            
+                // 1) 크롤링 결과물 준비
+                const crawledData = [];
+
+                // 2) 글번호 크롤링 (크롤링동안 게시물 올라오는건 고려 X, 대신 사람들 안올라오는 시간에 크롤링 ㄱㄱ)
+                    // 그 페이지 마지막 게시물까지 크롤링
+                    for (let i=0;i<30;i++) {
+                        // 게시물 클릭
+                        await page.click(`#revolution_main_table > tbody > tr:nth-child(${2*i+3}) > td:nth-child(4) > a`)
+                        // 정보들 크롤링 해서 객체에 담기
+                            // boardDate 크롤링 + 정제
+                                // 크롤링
+                                let boardDate = await page.$eval('body > div > div:nth-child(7) > div > table:nth-child(13) > tbody > tr > td:nth-child(2) > span:nth-child(5)',
+                                    element => element.textContent as string
+                                );
+                                // 앞부분 정제
+                                boardDate = boardDate.replace('등록일 : ','')
+                                // 뒷부분 정제 
+                                    // i. ~시간 전 부분 있으면 삭제
+                                    if (boardDate.includes('전')){
+                                        const openBracketIndex = boardDate.indexOf('(') - 1;
+                                        boardDate = boardDate.slice(0,openBracketIndex);
+                                    // ii. 없으면 공백 삭제
+                                    } else {
+                                        const lastEmptyIndex = boardDate.lastIndexOf(' ');
+                                        boardDate = boardDate.slice(0,boardDate.lastIndexOf(' '));
+                                    }
+                                // '2023-01-10 12:38:52' 형식으로 정제 완료 후 timestamp 형식으로 전환
+                                boardDate = toTimestamp(boardDate) as any;
+                            // boardId 크롤링 + 정제
+                                // 크롤링
+                                let boardId = await page.$eval('body > div > div:nth-child(7) > div > table:nth-child(13) > tbody > tr > td:nth-child(2) > span:nth-child(6)',
+                                    element => element.textContent as string
+                                );
+                                // ' | 글번호 : 192704 | 132179'
+                                    // 처음으로 숫자가 나오는 인덱스 찾고 => 거기서부터|나오기 앞앞 까지 크롤링
+                                    boardId = boardId.slice(3);
+                                    const boardIdArray = boardId.split('');
+                                    const firstNumberIndex = boardIdArray.findIndex(each => parseInt(each));
+                                    const barIndex = boardId.indexOf('|') -1 ;
+                                    boardId = boardId.slice(firstNumberIndex,barIndex);
+                            // 게시글 - otherInfo
+                                let otherInfo = await page.$eval('#bonmoon > tbody > tr:nth-child(1) > td > div',
+                                    element => element.textContent
+                                );
+                            // 전화번호 - contactNumber
+                                let contactNumber = 
+                                
+                    }
+
+                    
+
+                    // 빠져나오기 
+
+
+
+
+
+
+
+
+
+
 
             // 1) 현재 시간 불러오기
             const currentTimestamp = Date.now();
@@ -57,9 +121,6 @@ async function crawl(crawlTerm : number , koreapas_id : string, koreapas_pw : st
             // 2) 가장 위 게시물부터 시작, 클릭 => 시간 검증 => 검증 완료시 => 크롤링 => 나오기
                 // (1) 가장 위 게시물 클릭
                 await page.click('#revolution_main_table > tbody > tr:nth-child(3) > td:nth-child(4) > a')
-                await page.waitForSelector('body > div > div:nth-child(7) > div > table:nth-child(13) > tbody > tr > td:nth-child(2) > span:nth-child(5)', {
-                    timeout: 5000 // wait for 10 seconds
-                });
 
                 // (2) 시간 가져와서, '등록일' 부분 제거
                           
@@ -76,22 +137,16 @@ async function crawl(crawlTerm : number , koreapas_id : string, koreapas_pw : st
                     // ii. 없으면 공백 삭제
                     } else {
                         const lastEmptyIndex = boardTime.lastIndexOf(' ');
-                         boardTime = boardTime.slice(0,boardTime.lastIndexOf(' '));
+                        boardTime = boardTime.slice(0,boardTime.lastIndexOf(' '));
                     }
-                        // '2023-01-10 12:38:52' 형식으로 정제 완료
-                console.log(boardTime)
-                // (4)
-                toTimestamp(boardTime)
+                // '2023-01-10 12:38:52' 형식으로 정제 완료 후 timestamp 형식으로 전환
+                const boardTimestamp = toTimestamp(boardTime)
+
+                // (4) 현재 시간과 비교후, 
                   
 
-                // (3) 
-                
-
-                
-
-
-                // (2) 시간 검증 실패시 : 크롤링 종료
-
+                    // 처음 : 그냥 2주간 데이터 모두다 불러오기
+                    // 갱신 : 매일 6시간마다 크롤링 요청 + 기존 데이터 삭제
 
 
 
@@ -102,7 +157,7 @@ async function crawl(crawlTerm : number , koreapas_id : string, koreapas_pw : st
             
             
 
-    // (대신 처음에는, 최근 2주간의 데이터를 크롤링한다.)
+    // 
 
 
         
