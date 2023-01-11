@@ -29,7 +29,7 @@ function toTimestamp(dateString : string) : number {
 
 async function crawl(firstCrawlTerm : number , koreapas_id : string, koreapas_pw : string) : Promise<IBoardCrawledData[]> {
     //1. 브라우저 켜고, 새탭 열기, 크기조정
-    const browser = await puppeteer.launch({headless : false})
+    const browser = await puppeteer.launch({headless : false,devtools:true,executablePath :'/Applications/Google Chrome.app/Contents/MacOS/Google Chrome' })
 	const page = await browser.newPage();
 	await page.setViewport({width: 1280, height:720})
     //2. 홈페이지로 이동
@@ -70,13 +70,14 @@ async function crawl(firstCrawlTerm : number , koreapas_id : string, koreapas_pw
 
                 // 2) 크롤링 (크롤링동안 게시물 올라오는건 고려 X, 대신 사람들 안올라오는 시간에 크롤링 ㄱㄱ)
                     outer : while (!isOld){
-
                         inner : for (let i=0;i<30;i++) {
+                            console.log('페이지 접속중')
                             await page.waitForSelector(`#revolution_main_table > tbody > tr:nth-child(${2*i+3}) > td:nth-child(4) > a`)
                             await Promise.all([
                                 page.waitForNavigation(),
                                 page.click(`#revolution_main_table > tbody > tr:nth-child(${2*i+3}) > td:nth-child(4) > a`)
                             ])
+                            console.log('접속완료')
     
     
                             // 정보들 크롤링 해서 객체에 담기
@@ -117,7 +118,7 @@ async function crawl(firstCrawlTerm : number , koreapas_id : string, koreapas_pw
                                     // '2023-01-10 12:38:52' 형식으로 정제 완료 후 timestamp 형식으로 전환
                                     boardDate = toTimestamp(boardDate) as any;
                                     if (currentTimestamp - parseInt(boardDate) > firstCrawlTerm*3600000*24){
-                                        console.log('================================크롤링 완료================================')
+                                        console.log('================================Crawling Complete================================')
                                         isOld = true;
                                         break outer;
 
@@ -167,17 +168,19 @@ async function crawl(firstCrawlTerm : number , koreapas_id : string, koreapas_pw
                                     homeImgUrls,
                                     otherInfo,
                                 }
-                                console.log(boardCrawledData);
+                                console.log(boardCrawledData.boardId);
                                 boardCrawledDatas.push(boardCrawledData);
     
                             // 페이지 빠져나오기
+                            console.log('뒤로가기')
                             await page.goBack();
                             
                         }
                         
                         //첫번째 페이지 여부 판단
-                        const isFirstPage = await page.$eval('body > div > div:nth-child(7) > div > form > table:nth-child(14) > tbody > tr > td.nanum-g > span:nth-child(11) > a:nth-child(2)',
-                            element => !!element
+                        const isFirstPage = await page.evaluate(
+                            selector => document.querySelector(selector) !== null,
+                            'body > div > div:nth-child(7) > div > form > table:nth-child(14) > tbody > tr > td.nanum-g > span:nth-child(11) > a:nth-child(2)'
                         )
 
                         // 다음페이지 넘어가고, 로드될때까지 기다리기
@@ -209,7 +212,7 @@ async function crawl(firstCrawlTerm : number , koreapas_id : string, koreapas_pw
 
 
 
-
+    await browser.close();
     return boardCrawledDatas 
 }
 (async () => {
